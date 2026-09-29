@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: eventflow
+      POSTGRES_PASSWORD: eventflow
+      POSTGRES_DB: eventflow
+    ports:
+      - "5433:5432"
+    volumes:
+      - eventflow_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eventflow -d eventflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  eventflow_db_data:

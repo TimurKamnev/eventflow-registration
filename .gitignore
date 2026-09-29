@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+*.log
+
+# исходный документ с заданиями (не часть продукта)
+Задания Agentic Developer*.pdf
