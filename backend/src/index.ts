@@ -12,6 +12,8 @@ import {
   cancelMyRegistration,
 } from "./registrations.js";
 import { listEventNotifications } from "./notifications.js";
+import { checkinByCode, getEventCounts } from "./checkin.js";
+import { attachWebSocketServer } from "./ws.js";
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -43,11 +45,16 @@ app.get("/api/events/:id", requireOrganizer, getEvent);
 app.patch("/api/events/:id", requireOrganizer, updateEvent);
 app.get("/api/events/:id/notifications", requireOrganizer, listEventNotifications);
 
+app.get("/api/events/:id/counts", requireOrganizer, getEventCounts);
+app.post("/api/checkin", requireOrganizer, checkinByCode);
+
 app.get("/api/events/:id/public", getPublicEvent);
 app.post("/api/events/:id/registrations", registerForEvent);
 app.get("/api/my/:token", getMyRegistration);
 app.post("/api/my/:token/cancel", cancelMyRegistration);
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`backend listening on http://localhost:${port}`);
 });
+
+attachWebSocketServer(server);

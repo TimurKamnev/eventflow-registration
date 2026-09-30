@@ -6,10 +6,11 @@ interface Props {
   onCreate: () => void;
   onEdit: (event: EventRecord) => void;
   onViewNotifications: (event: EventRecord) => void;
+  onCheckin: (event: EventRecord) => void;
   reloadKey: number;
 }
 
-export function EventsList({ onCreate, onEdit, onViewNotifications, reloadKey }: Props) {
+export function EventsList({ onCreate, onEdit, onViewNotifications, onCheckin, reloadKey }: Props) {
   const [events, setEvents] = useState<EventRecord[] | null>(null);
 
   useEffect(() => {
@@ -48,6 +49,7 @@ export function EventsList({ onCreate, onEdit, onViewNotifications, reloadKey }:
                     Публичная страница
                   </a>
                   <button onClick={() => onViewNotifications(event)}>Письма</button>
+                  <button onClick={() => onCheckin(event)}>Чекин</button>
                 </td>
               </tr>
             ))}

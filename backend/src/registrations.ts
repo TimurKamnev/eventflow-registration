@@ -4,6 +4,7 @@ import { OCCUPYING_STATUSES } from "./constants.js";
 import { generateAccessToken, generateTicketCode } from "./ids.js";
 import { parseEmail } from "./validation.js";
 import { handleError } from "./http.js";
+import { broadcastEventCounts } from "./ws.js";
 
 const NEUTRAL_RESPONSE = {
   message: "Если регистрация возможна, письмо с деталями придёт на указанный email.",
@@ -105,7 +106,8 @@ async function registerWithRetry(eventId: string, email: string, res: Response) 
         [event.id, email]
       );
 
-      if (existing.rows.length === 0) {
+      const isNewRegistration = existing.rows.length === 0;
+      if (isNewRegistration) {
         const occupied = await client.query(
           `select count(*)::int as count from registrations
            where event_id = $1 and status = any($2)`,
@@ -142,6 +144,7 @@ async function registerWithRetry(eventId: string, email: string, res: Response) 
       }
 
       await client.query("COMMIT");
+      if (isNewRegistration) await broadcastEventCounts(event.id);
       return res.status(202).json(NEUTRAL_RESPONSE);
     } catch (err) {
       await client.query("ROLLBACK").catch(() => {});
@@ -291,6 +294,7 @@ export async function cancelMyRegistration(req: Request, res: Response) {
     }
 
     await client.query("COMMIT");
+    await broadcastEventCounts(event.id);
     res.json({ status: "cancelled" });
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});

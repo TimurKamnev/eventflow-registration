@@ -44,6 +44,12 @@ export interface MyRegistration {
   checked_in_at: string | null;
 }
 
+export interface EventCounts {
+  confirmed: number;
+  waitlisted: number;
+  checked_in: number;
+}
+
 export interface EventNotification {
   id: string;
   type: "waitlist" | "ticket" | "reminder" | "reschedule";
@@ -90,4 +96,16 @@ export const api = {
   myRegistration: (token: string) => request<MyRegistration>(`/api/my/${token}`),
   cancelMyRegistration: (token: string) =>
     request<{ status: string }>(`/api/my/${token}/cancel`, { method: "POST" }),
+
+  eventCounts: (id: string) => request<EventCounts>(`/api/events/${id}/counts`),
+  checkin: (code: string) =>
+    request<{ status: string }>("/api/checkin", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    }),
 };
+
+export function eventCountsWsUrl(eventId: string): string {
+  const wsBase = API_URL.replace(/^http/, "ws");
+  return `${wsBase}/ws?eventId=${eventId}`;
+}

@@ -6,13 +6,15 @@ import { EventForm } from "./EventForm";
 import { PublicEventPage } from "./PublicEventPage";
 import { ParticipantPage } from "./ParticipantPage";
 import { NotificationsView } from "./NotificationsView";
+import { CheckinView } from "./CheckinView";
 import "./App.css";
 
 type View =
   | { kind: "list" }
   | { kind: "create" }
   | { kind: "edit"; event: EventRecord }
-  | { kind: "notifications"; event: EventRecord };
+  | { kind: "notifications"; event: EventRecord }
+  | { kind: "checkin"; event: EventRecord };
 
 function App() {
   // Все хуки вызываются безусловно и первыми — раннее ветвление по маршруту
@@ -57,6 +59,7 @@ function App() {
           onCreate={() => setView({ kind: "create" })}
           onEdit={(event) => setView({ kind: "edit", event })}
           onViewNotifications={(event) => setView({ kind: "notifications", event })}
+          onCheckin={(event) => setView({ kind: "checkin", event })}
         />
       )}
 
@@ -83,6 +86,10 @@ function App() {
 
       {view.kind === "notifications" && (
         <NotificationsView event={view.event} onBack={() => setView({ kind: "list" })} />
+      )}
+
+      {view.kind === "checkin" && (
+        <CheckinView event={view.event} onBack={() => setView({ kind: "list" })} />
       )}
     </main>
   );
