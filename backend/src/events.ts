@@ -103,6 +103,10 @@ export async function updateEvent(req: AuthedRequest, res: Response) {
     // же транзакции, что и сам перенос. Правка только capacity/title/description
     // (startsAtChanged=false) уведомлений не создаёт — это не то же событие
     // для участника, который уже получил билет на конкретную дату.
+    // checked_in — тоже активный участник: чекин не привязан к тому, началось
+    // ли событие (checkinByCode это не проверяет), поэтому перенос может
+    // случиться уже после того, как кто-то отмечен на входе, и его тоже нужно
+    // предупредить.
     if (startsAtChanged) {
       await client.query(
         `insert into notifications (event_id, registration_id, type, schedule_version, payload)
@@ -115,7 +119,7 @@ export async function updateEvent(req: AuthedRequest, res: Response) {
              'my_registration_url', $5 || '/my/' || r.access_token
            )
          from registrations r
-         where r.event_id = $1 and r.status in ('confirmed', 'waitlisted')
+         where r.event_id = $1 and r.status in ('confirmed', 'waitlisted', 'checked_in')
          on conflict (registration_id, type, schedule_version) do nothing`,
         [event.id, nextVersion, nextTitle, nextStartsAt.toISOString(), frontendOrigin()]
       );
