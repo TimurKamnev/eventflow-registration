@@ -1,33 +1,66 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { api, type EventRecord } from "./api";
+import { LoginForm } from "./LoginForm";
+import { EventsList } from "./EventsList";
+import { EventForm } from "./EventForm";
 import "./App.css";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
-
-type HealthState =
-  | { kind: "loading" }
-  | { kind: "ok"; now: string }
-  | { kind: "error"; message: string };
+type View = { kind: "list" } | { kind: "create" } | { kind: "edit"; event: EventRecord };
 
 function App() {
-  const [health, setHealth] = useState<HealthState>({ kind: "loading" });
+  const [authed, setAuthed] = useState(false);
+  const [view, setView] = useState<View>({ kind: "list" });
+  const [reloadKey, setReloadKey] = useState(0);
 
-  useEffect(() => {
-    fetch(`${API_URL}/health/db`)
-      .then((res) => res.json())
-      .then((data) => setHealth({ kind: "ok", now: data.now }))
-      .catch((err) => setHealth({ kind: "error", message: String(err) }));
-  }, []);
+  if (!authed) {
+    return (
+      <main style={{ fontFamily: "sans-serif", padding: "2rem" }}>
+        <LoginForm onSuccess={() => setAuthed(true)} />
+      </main>
+    );
+  }
 
   return (
     <main style={{ fontFamily: "sans-serif", padding: "2rem" }}>
-      <h1>EventFlow</h1>
-      <p>Каркас проекта: frontend и backend общаются по сети, backend подключён к PostgreSQL.</p>
-      <p>
-        Статус backend/DB:{" "}
-        {health.kind === "loading" && "проверяю..."}
-        {health.kind === "ok" && `ok, время БД (UTC): ${health.now}`}
-        {health.kind === "error" && `ошибка: ${health.message}`}
-      </p>
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <button
+          onClick={async () => {
+            await api.logout();
+            setAuthed(false);
+          }}
+        >
+          Выйти
+        </button>
+      </div>
+
+      {view.kind === "list" && (
+        <EventsList
+          reloadKey={reloadKey}
+          onCreate={() => setView({ kind: "create" })}
+          onEdit={(event) => setView({ kind: "edit", event })}
+        />
+      )}
+
+      {view.kind === "create" && (
+        <EventForm
+          onSaved={() => {
+            setReloadKey((k) => k + 1);
+            setView({ kind: "list" });
+          }}
+          onCancel={() => setView({ kind: "list" })}
+        />
+      )}
+
+      {view.kind === "edit" && (
+        <EventForm
+          event={view.event}
+          onSaved={() => {
+            setReloadKey((k) => k + 1);
+            setView({ kind: "list" });
+          }}
+          onCancel={() => setView({ kind: "list" })}
+        />
+      )}
     </main>
   );
 }
