@@ -1,25 +1,9 @@
 import type { Response } from "express";
 import { pool } from "./db.js";
 import type { AuthedRequest } from "./auth.js";
-import {
-  ValidationError,
-  parseCapacity,
-  parseDescription,
-  parseStartsAt,
-  parseTitle,
-} from "./validation.js";
-
-const OCCUPYING_STATUSES = ["confirmed", "checked_in"];
-
-function handleError(err: unknown, res: Response) {
-  if (err instanceof ValidationError) {
-    return res.status(400).json({ error: err.message });
-  }
-  // Реальная причина остаётся только в серверном логе — клиенту нельзя отдавать
-  // текст ошибки БД (может содержать структуру схемы, значения параметров и т.д.).
-  console.error("events request failed:", err);
-  return res.status(500).json({ error: "internal_error" });
-}
+import { parseCapacity, parseDescription, parseStartsAt, parseTitle } from "./validation.js";
+import { OCCUPYING_STATUSES } from "./constants.js";
+import { handleError } from "./http.js";
 
 export async function createEvent(req: AuthedRequest, res: Response) {
   try {

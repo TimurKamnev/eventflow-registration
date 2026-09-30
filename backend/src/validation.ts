@@ -43,3 +43,12 @@ export function parseCapacity(value: unknown): number {
   }
   return value;
 }
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export function parseEmail(value: unknown): string {
+  if (typeof value !== "string" || !EMAIL_PATTERN.test(value.trim())) {
+    throw new ValidationError("email must be a valid email address");
+  }
+  return value.trim().toLowerCase();
+}

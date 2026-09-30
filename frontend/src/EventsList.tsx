@@ -5,10 +5,11 @@ import { formatBishkek } from "./time";
 interface Props {
   onCreate: () => void;
   onEdit: (event: EventRecord) => void;
+  onViewNotifications: (event: EventRecord) => void;
   reloadKey: number;
 }
 
-export function EventsList({ onCreate, onEdit, reloadKey }: Props) {
+export function EventsList({ onCreate, onEdit, onViewNotifications, reloadKey }: Props) {
   const [events, setEvents] = useState<EventRecord[] | null>(null);
 
   useEffect(() => {
@@ -41,8 +42,12 @@ export function EventsList({ onCreate, onEdit, reloadKey }: Props) {
                 <td>{formatBishkek(event.starts_at)}</td>
                 <td>{event.capacity}</td>
                 <td>{event.schedule_version}</td>
-                <td>
+                <td style={{ display: "flex", gap: 8 }}>
                   <button onClick={() => onEdit(event)}>Редактировать</button>
+                  <a href={`/e/${event.id}`} target="_blank" rel="noreferrer">
+                    Публичная страница
+                  </a>
+                  <button onClick={() => onViewNotifications(event)}>Письма</button>
                 </td>
               </tr>
             ))}

@@ -26,6 +26,40 @@ export interface EventRecord {
   schedule_version: number;
 }
 
+export interface PublicEvent {
+  id: string;
+  title: string;
+  description: string;
+  starts_at: string;
+  capacity: number;
+  remaining: number;
+  isFull: boolean;
+}
+
+export interface MyRegistration {
+  event: { title: string; description: string; starts_at: string };
+  status: "confirmed" | "waitlisted" | "cancelled" | "checked_in";
+  ticket_code: string | null;
+  waitlist_position: number | null;
+  checked_in_at: string | null;
+}
+
+export interface EventNotification {
+  id: string;
+  type: "waitlist" | "ticket" | "reminder" | "reschedule";
+  schedule_version: number;
+  payload: {
+    event_title: string;
+    starts_at: string;
+    ticket_code: string | null;
+    my_registration_url: string;
+  };
+  dispatch_status: string;
+  created_at: string;
+  sent_at: string | null;
+  registration_email: string;
+}
+
 export const api = {
   login: (email: string, password: string) =>
     request<{ email: string }>("/api/auth/login", {
@@ -44,4 +78,16 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(data),
     }),
+  eventNotifications: (id: string) =>
+    request<{ notifications: EventNotification[] }>(`/api/events/${id}/notifications`),
+
+  publicEvent: (id: string) => request<{ event: PublicEvent }>(`/api/events/${id}/public`),
+  register: (id: string, email: string) =>
+    request<{ message: string }>(`/api/events/${id}/registrations`, {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+  myRegistration: (token: string) => request<MyRegistration>(`/api/my/${token}`),
+  cancelMyRegistration: (token: string) =>
+    request<{ status: string }>(`/api/my/${token}/cancel`, { method: "POST" }),
 };

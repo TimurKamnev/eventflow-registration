@@ -5,6 +5,13 @@ import cookieParser from "cookie-parser";
 import { pool } from "./db.js";
 import { login, logout, requireOrganizer } from "./auth.js";
 import { createEvent, listEvents, getEvent, updateEvent } from "./events.js";
+import {
+  getPublicEvent,
+  registerForEvent,
+  getMyRegistration,
+  cancelMyRegistration,
+} from "./registrations.js";
+import { listEventNotifications } from "./notifications.js";
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -34,6 +41,12 @@ app.post("/api/events", requireOrganizer, createEvent);
 app.get("/api/events", requireOrganizer, listEvents);
 app.get("/api/events/:id", requireOrganizer, getEvent);
 app.patch("/api/events/:id", requireOrganizer, updateEvent);
+app.get("/api/events/:id/notifications", requireOrganizer, listEventNotifications);
+
+app.get("/api/events/:id/public", getPublicEvent);
+app.post("/api/events/:id/registrations", registerForEvent);
+app.get("/api/my/:token", getMyRegistration);
+app.post("/api/my/:token/cancel", cancelMyRegistration);
 
 app.listen(port, () => {
   console.log(`backend listening on http://localhost:${port}`);
