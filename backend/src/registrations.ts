@@ -5,6 +5,7 @@ import { generateAccessToken, generateTicketCode } from "./ids.js";
 import { parseEmail } from "./validation.js";
 import { handleError } from "./http.js";
 import { broadcastEventCounts } from "./ws.js";
+import { myRegistrationUrl } from "./links.js";
 
 const NEUTRAL_RESPONSE = {
   message: "Если регистрация возможна, письмо с деталями придёт на указанный email.",
@@ -22,14 +23,6 @@ const MAX_ID_COLLISION_ATTEMPTS = 3;
 interface PgError extends Error {
   code?: string;
   constraint?: string;
-}
-
-function frontendOrigin(): string {
-  return process.env.FRONTEND_ORIGIN ?? "http://localhost:5173";
-}
-
-function myRegistrationUrl(accessToken: string): string {
-  return `${frontendOrigin()}/my/${accessToken}`;
 }
 
 export async function getPublicEvent(req: Request, res: Response) {

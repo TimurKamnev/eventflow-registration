@@ -60,7 +60,8 @@ export interface EventNotification {
     ticket_code: string | null;
     my_registration_url: string;
   };
-  dispatch_status: string;
+  dispatch_status: "pending" | "sent" | "failed" | "skipped";
+  skip_reason: string | null;
   created_at: string;
   sent_at: string | null;
   registration_email: string;

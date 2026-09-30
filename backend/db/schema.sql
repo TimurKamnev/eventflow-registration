@@ -57,3 +57,10 @@ create table if not exists notifications (
 create index if not exists notifications_pending_idx
   on notifications (dispatch_status)
   where dispatch_status = 'pending';
+
+-- Этап 5: воркер обработки. processed_at фиксируется и для 'sent', и для
+-- 'skipped' (когда именно решение принято); skip_reason — почему письмо не
+-- отправлено (устарела версия события, регистрация отменена и т.п.), видно
+-- организатору для диагностики.
+alter table notifications add column if not exists processed_at timestamptz;
+alter table notifications add column if not exists skip_reason text;

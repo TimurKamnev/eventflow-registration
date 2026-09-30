@@ -14,6 +14,7 @@ import {
 import { listEventNotifications } from "./notifications.js";
 import { checkinByCode, getEventCounts } from "./checkin.js";
 import { attachWebSocketServer } from "./ws.js";
+import { runWorkerTick } from "./worker.js";
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -58,3 +59,12 @@ const server = app.listen(port, () => {
 });
 
 attachWebSocketServer(server);
+
+// Фоновая обработка notifications: создание напоминаний за 24ч и эмуляция
+// отправки pending-писем. Идемпотентность — на уровне БД (уникальный индекс,
+// FOR UPDATE SKIP LOCKED), поэтому интервал и рестарт процесса безопасны.
+const WORKER_INTERVAL_MS = Number(process.env.WORKER_INTERVAL_MS) || 30_000;
+runWorkerTick().catch((err) => console.error("worker tick failed:", err));
+setInterval(() => {
+  runWorkerTick().catch((err) => console.error("worker tick failed:", err));
+}, WORKER_INTERVAL_MS);

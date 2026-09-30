@@ -4,6 +4,7 @@ import type { AuthedRequest } from "./auth.js";
 import { parseCapacity, parseDescription, parseStartsAt, parseTitle } from "./validation.js";
 import { OCCUPYING_STATUSES } from "./constants.js";
 import { handleError } from "./http.js";
+import { frontendOrigin } from "./links.js";
 
 export async function createEvent(req: AuthedRequest, res: Response) {
   try {
@@ -97,6 +98,28 @@ export async function updateEvent(req: AuthedRequest, res: Response) {
        returning *`,
       [nextTitle, nextDescription, nextStartsAt.toISOString(), nextCapacity, nextVersion, event.id]
     );
+
+    // Перенос даты — уведомление reschedule всем активным участникам, в той
+    // же транзакции, что и сам перенос. Правка только capacity/title/description
+    // (startsAtChanged=false) уведомлений не создаёт — это не то же событие
+    // для участника, который уже получил билет на конкретную дату.
+    if (startsAtChanged) {
+      await client.query(
+        `insert into notifications (event_id, registration_id, type, schedule_version, payload)
+         select
+           $1, r.id, 'reschedule', $2,
+           jsonb_build_object(
+             'event_title', $3::text,
+             'starts_at', $4::timestamptz,
+             'ticket_code', r.ticket_code,
+             'my_registration_url', $5 || '/my/' || r.access_token
+           )
+         from registrations r
+         where r.event_id = $1 and r.status in ('confirmed', 'waitlisted')
+         on conflict (registration_id, type, schedule_version) do nothing`,
+        [event.id, nextVersion, nextTitle, nextStartsAt.toISOString(), frontendOrigin()]
+      );
+    }
 
     await client.query("COMMIT");
     res.json({ event: updated.rows[0] });
