@@ -1015,3 +1015,32 @@ backend уже был поднят с большим интервалом, но 
 GitHub Actions — это станет известно только после push.
 
 Не закоммичено.
+
+## 2026-10-01, 13:41–13:43 (Asia/Bishkek) — commit/push, первый реальный прогон CI на GitHub Actions
+
+Предкоммитные проверки: `git diff --check` — чисто; `tsc --noEmit` backend и
+frontend — чисто; скан staged-диффа на секреты нашёл только ожидаемые
+CI-only значения-заглушки для эфемерного Postgres-сервиса
+(`POSTGRES_PASSWORD: eventflow` — тот же dev-пароль, что уже публичен в
+`.env.example`/README; `ORGANIZER_PASSWORD`/`SESSION_SECRET` с явным
+суффиксом `ci-only-...`) — не секреты, подняты и уничтожаются с каждым
+прогоном job. Локальных путей и личных email в диффе нет.
+
+Commit `5444f5efdd97f40d74bc7c9074591452c8b049af`, push в `origin/main`.
+
+Push запустил `.github/workflows/scenario.yml` (triggers on push to main) —
+не предположение, проверено через GitHub API
+(`GET /repos/.../actions/runs`): run `36831769427`, закоммиченный SHA
+`5444f5ef` совпадает. Опросил `status`/`conclusion` до завершения:
+
+- `status: completed`, `conclusion: success`, 07:41:22–07:42:02 UTC (40с).
+- Все 10 содержательных шагов job — `success`, включая сам `Run npm run
+  scenario` (не только служебные checkout/setup-node).
+
+Это первый реальный подтверждённый прогон — до этого момента CI был только
+настроен и промоделирован локально (см. предыдущую запись). README обновлён:
+убрал из «следующим заходом» уже закрытый пункт про CI, добавил в раздел
+«Интеграционный сценарий» факт подтверждённого прогона со ссылкой на
+конкретный run, не только утверждение, что workflow существует.
+
+Коммит и push этой правки README — отдельно, после публикации данной записи.
