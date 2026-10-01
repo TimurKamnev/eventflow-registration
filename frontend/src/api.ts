@@ -74,6 +74,7 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
   logout: () => request<{ ok: true }>("/api/auth/logout", { method: "POST" }),
+  me: () => request<{ organizerId: string }>("/api/auth/me"),
   listEvents: () => request<{ events: EventRecord[] }>("/api/events"),
   createEvent: (data: Pick<EventRecord, "title" | "description" | "starts_at" | "capacity">) =>
     request<{ event: EventRecord }>("/api/events", {

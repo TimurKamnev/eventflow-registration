@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, type EventRecord } from "./api";
 import { LoginForm } from "./LoginForm";
 import { EventsList } from "./EventsList";
@@ -20,6 +20,7 @@ function App() {
   // Все хуки вызываются безусловно и первыми — раннее ветвление по маршруту
   // идёт только в JSX ниже, иначе порядок хуков менялся бы между рендерами.
   const [authed, setAuthed] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const [view, setView] = useState<View>({ kind: "list" });
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -28,9 +29,28 @@ function App() {
   // роутера пока достаточно двух путей, react-router не нужен.
   const path = window.location.pathname;
   const eventMatch = path.match(/^\/e\/([^/]+)$/);
-  if (eventMatch) return <PublicEventPage eventId={eventMatch[1]} />;
   const myMatch = path.match(/^\/my\/([^/]+)$/);
+  const isPublicRoute = Boolean(eventMatch || myMatch);
+
+  // Кука сессии (httpOnly) переживает перезагрузку страницы сама по себе —
+  // без этой проверки при маунте authed всегда стартовал бы с false и
+  // организатора встречала форма логина даже с ещё валидной сессией.
+  useEffect(() => {
+    if (isPublicRoute) {
+      setCheckingSession(false);
+      return;
+    }
+    api
+      .me()
+      .then(() => setAuthed(true))
+      .catch(() => setAuthed(false))
+      .finally(() => setCheckingSession(false));
+  }, [isPublicRoute]);
+
+  if (eventMatch) return <PublicEventPage eventId={eventMatch[1]} />;
   if (myMatch) return <ParticipantPage token={myMatch[1]} />;
+
+  if (checkingSession) return null;
 
   if (!authed) {
     return (

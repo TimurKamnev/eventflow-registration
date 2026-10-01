@@ -203,96 +203,110 @@ export async function getMyRegistration(req: Request, res: Response) {
 }
 
 export async function cancelMyRegistration(req: Request, res: Response) {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  for (let attempt = 1; attempt <= MAX_ID_COLLISION_ATTEMPTS; attempt++) {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
 
-    const lookup = await client.query(
-      "select event_id from registrations where access_token = $1",
-      [req.params.token]
-    );
-    if (lookup.rows.length === 0) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({ error: "not_found" });
-    }
-    const eventId = lookup.rows[0].event_id;
-
-    // Блокировка строки события — тот же порядок, что и в регистрации/PATCH
-    // события, иначе возможна гонка между отменой и параллельной регистрацией.
-    const eventResult = await client.query("select * from events where id = $1 for update", [
-      eventId,
-    ]);
-    const event = eventResult.rows[0];
-
-    const regResult = await client.query(
-      "select * from registrations where access_token = $1 for update",
-      [req.params.token]
-    );
-    const registration = regResult.rows[0];
-
-    if (registration.status === "checked_in") {
-      await client.query("ROLLBACK");
-      return res.status(409).json({ error: "cannot_cancel_after_checkin" });
-    }
-    if (registration.status === "cancelled") {
-      await client.query("COMMIT");
-      return res.json({ status: "cancelled" });
-    }
-
-    const wasConfirmed = registration.status === "confirmed";
-
-    await client.query(
-      "update registrations set status = 'cancelled', updated_at = now() where id = $1",
-      [registration.id]
-    );
-
-    // Событие уже началось — очередь больше не двигаем. Отмена самого места
-    // всё ещё разрешена (участник просто не придёт), но раздавать его дальше
-    // по листу ожидания после старта не имеет смысла.
-    const eventAlreadyStarted = new Date(event.starts_at).getTime() <= Date.now();
-
-    if (wasConfirmed && !eventAlreadyStarted) {
-      const nextInLine = await client.query(
-        `select * from registrations
-         where event_id = $1 and status = 'waitlisted'
-         order by seq asc
-         limit 1
-         for update`,
-        [event.id]
+      const lookup = await client.query(
+        "select event_id from registrations where access_token = $1",
+        [req.params.token]
       );
-      const promoted = nextInLine.rows[0];
-      if (promoted) {
-        const ticketCode = generateTicketCode();
-        await client.query(
-          "update registrations set status = 'confirmed', ticket_code = $1, updated_at = now() where id = $2",
-          [ticketCode, promoted.id]
-        );
-        await client.query(
-          `insert into notifications (event_id, registration_id, type, schedule_version, payload)
-           values ($1, $2, 'ticket', $3, $4)
-           on conflict (registration_id, type, schedule_version) do nothing`,
-          [
-            event.id,
-            promoted.id,
-            event.schedule_version,
-            JSON.stringify({
-              event_title: event.title,
-              starts_at: event.starts_at,
-              ticket_code: ticketCode,
-              my_registration_url: myRegistrationUrl(promoted.access_token),
-            }),
-          ]
-        );
+      if (lookup.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ error: "not_found" });
       }
-    }
+      const eventId = lookup.rows[0].event_id;
 
-    await client.query("COMMIT");
-    await broadcastEventCounts(event.id);
-    res.json({ status: "cancelled" });
-  } catch (err) {
-    await client.query("ROLLBACK").catch(() => {});
-    handleError(err, res);
-  } finally {
-    client.release();
+      // Блокировка строки события — тот же порядок, что и в регистрации/PATCH
+      // события, иначе возможна гонка между отменой и параллельной регистрацией.
+      const eventResult = await client.query("select * from events where id = $1 for update", [
+        eventId,
+      ]);
+      const event = eventResult.rows[0];
+
+      const regResult = await client.query(
+        "select * from registrations where access_token = $1 for update",
+        [req.params.token]
+      );
+      const registration = regResult.rows[0];
+
+      if (registration.status === "checked_in") {
+        await client.query("ROLLBACK");
+        return res.status(409).json({ error: "cannot_cancel_after_checkin" });
+      }
+      if (registration.status === "cancelled") {
+        await client.query("COMMIT");
+        return res.json({ status: "cancelled" });
+      }
+
+      const wasConfirmed = registration.status === "confirmed";
+
+      await client.query(
+        "update registrations set status = 'cancelled', updated_at = now() where id = $1",
+        [registration.id]
+      );
+
+      // Событие уже началось — очередь больше не двигаем. Отмена самого места
+      // всё ещё разрешена (участник просто не придёт), но раздавать его дальше
+      // по листу ожидания после старта не имеет смысла.
+      const eventAlreadyStarted = new Date(event.starts_at).getTime() <= Date.now();
+
+      if (wasConfirmed && !eventAlreadyStarted) {
+        const nextInLine = await client.query(
+          `select * from registrations
+           where event_id = $1 and status = 'waitlisted'
+           order by seq asc
+           limit 1
+           for update`,
+          [event.id]
+        );
+        const promoted = nextInLine.rows[0];
+        if (promoted) {
+          const ticketCode = generateTicketCode();
+          await client.query(
+            "update registrations set status = 'confirmed', ticket_code = $1, updated_at = now() where id = $2",
+            [ticketCode, promoted.id]
+          );
+          await client.query(
+            `insert into notifications (event_id, registration_id, type, schedule_version, payload)
+             values ($1, $2, 'ticket', $3, $4)
+             on conflict (registration_id, type, schedule_version) do nothing`,
+            [
+              event.id,
+              promoted.id,
+              event.schedule_version,
+              JSON.stringify({
+                event_title: event.title,
+                starts_at: event.starts_at,
+                ticket_code: ticketCode,
+                my_registration_url: myRegistrationUrl(promoted.access_token),
+              }),
+            ]
+          );
+        }
+      }
+
+      await client.query("COMMIT");
+      await broadcastEventCounts(event.id);
+      return res.json({ status: "cancelled" });
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
+
+      // Та же редкая коллизия случайного ticket_code, что и при регистрации
+      // (см. registerWithRetry) — только здесь генерируется при продвижении
+      // из очереди, а не при создании новой записи. Без повтора вся отмена
+      // целиком откатывалась бы из-за случайного совпадения, не связанного
+      // с действием участника.
+      const constraint = (err as PgError).constraint;
+      if (constraint === TICKET_CODE_CONSTRAINT && attempt < MAX_ID_COLLISION_ATTEMPTS) {
+        continue;
+      }
+
+      handleError(err, res);
+      return;
+    } finally {
+      client.release();
+    }
   }
 }

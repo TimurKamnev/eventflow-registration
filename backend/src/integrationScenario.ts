@@ -20,6 +20,33 @@
 //      выборки.
 //   5. Повторный чекин тем же кодом -> первый раз успех, второй раз отказ.
 //   6. Повторный тик воркера подряд -> не создаёт дублей notifications.
+//   7. Напоминание за 24ч до события создаётся и отправляется ровно один раз
+//      на подтверждённого участника; повторный тик не дублирует.
+//   8. Перенос даты события: уже ждущее отправки напоминание, устаревшее по
+//      schedule_version, помечается skipped (а не отправляется с неактуальной
+//      датой), а переносу соответствует собственное reschedule-уведомление,
+//      которое доходит; место участника не теряется.
+//
+// Проверки 7 и 8 — на отдельных тестовых событиях (каждое со своим cleanup),
+// а не на общем событии из проверок 1-6: там в это время уже отменённые/
+// продвинутые/отмеченные чекином регистрации, что сделало бы напоминания и
+// перенос даты не показательными.
+//
+// createDueReminders()/runWorkerTick() работают по ВСЕЙ подключённой БД, не
+// только по тестовым событиям (см. оговорку про проверку 6 ниже) — поэтому
+// ни одна проверка 7/8 не доверяет агрегатным числам, которые они возвращают
+// (там может быть учтено чужое due-событие или чужая pending-запись). Вместо
+// этого после каждого тика запрашивается состояние notifications, отдельно
+// отфильтрованное по event_id/registration_id именно этого прогона.
+//
+// Проверка 8 (перенос даты) ещё и гонится с собственным фоновым интервалом
+// backend (`WORKER_INTERVAL_MS`, по умолчанию 30с, index.ts): сценарий сам
+// создаёт due-напоминание и намеренно НЕ обрабатывает его сразу, чтобы
+// перенести дату, пока оно ещё pending, — если в этот момент успеет
+// сработать интервал backend, он обработает напоминание раньше переноса, и
+// проверка "устаревшее skipped" ничего не докажет. Перед запуском сценария
+// backend стоит поднимать с большим WORKER_INTERVAL_MS (см. README); при
+// маленьком интервале сценарий просто предупреждает об этом в консоли.
 //
 // Ничего не удаляет, кроме собственного тестового события (по конкретному id,
 // созданному этим же прогоном) — с этим он же и группами данных, привязанными
@@ -28,7 +55,7 @@
 
 import "dotenv/config";
 import { pool } from "./db.js";
-import { runWorkerTick } from "./worker.js";
+import { createDueReminders, runWorkerTick } from "./worker.js";
 
 const API_URL = process.env.API_URL ?? "http://localhost:3000";
 const ORGANIZER_EMAIL = process.env.ORGANIZER_EMAIL;
@@ -283,6 +310,189 @@ async function scenarioWorkerTickNoDuplicates(eventId: string) {
   console.log("[OK] повторный тик воркера подряд не создаёт дублей уведомлений");
 }
 
+async function createNotificationsTestEvent(startsAtMs: number, capacity: number): Promise<string> {
+  const title = `[integration-scenario] notifications ${new Date().toISOString()}`;
+  const res = await api("/api/events", {
+    method: "POST",
+    body: JSON.stringify({
+      title,
+      starts_at: new Date(startsAtMs).toISOString(),
+      capacity,
+    }),
+  });
+  assert(
+    res.status === 201,
+    `не удалось создать тестовое событие для проверки уведомлений: HTTP ${res.status}`
+  );
+  return res.body.event.id as string;
+}
+
+async function reminderRowsForEvent(eventId: string) {
+  const { rows } = await pool.query(
+    `select registration_id, dispatch_status from notifications
+     where event_id = $1 and type = 'reminder'`,
+    [eventId]
+  );
+  return rows as { registration_id: string; dispatch_status: string }[];
+}
+
+// Требование кейса №9: "За сутки до события всем участникам приходит
+// напоминание. Ровно одно." Событие создаётся сразу внутри 24-часового окна,
+// поэтому createDueReminders подхватывает его немедленно, без ожидания
+// реального времени.
+//
+// runWorkerTick() не фильтруется по событию — его агрегатные счётчики могут
+// отражать чужие due-события или совпасть по времени с фоновым интервалом
+// backend. Поэтому ниже ни разу не проверяется возвращаемое значение
+// runWorkerTick(), только состояние notifications этого event_id.
+async function scenarioReminderCreatedOnceWithin24h(): Promise<void> {
+  const eventId = await createNotificationsTestEvent(Date.now() + 2 * 60 * 60 * 1000, 2);
+  try {
+    const emailA = `scenario-reminder-a-${Date.now()}@example.test`;
+    const emailB = `scenario-reminder-b-${Date.now()}@example.test`;
+    await registerParticipant(eventId, emailA);
+    await registerParticipant(eventId, emailB);
+
+    // Один тик создаёт due-напоминания и сразу же их обрабатывает (та же
+    // функция создаёт и дренирует очередь, см. runWorkerTick) — после него
+    // оба участника должны иметь ровно одно отправленное напоминание.
+    await runWorkerTick();
+
+    const afterFirstTick = await reminderRowsForEvent(eventId);
+    assert(
+      afterFirstTick.length === 2,
+      `ожидалось ровно 2 напоминания (по одному на confirmed-участника), получено ${afterFirstTick.length}`
+    );
+    assert(
+      afterFirstTick.every((r) => r.dispatch_status === "sent"),
+      `все напоминания должны быть sent после первого тика, получено: ${JSON.stringify(afterFirstTick)}`
+    );
+
+    await runWorkerTick();
+
+    const afterSecondTick = await reminderRowsForEvent(eventId);
+    assert(
+      afterSecondTick.length === 2,
+      `повторный тик не должен создавать новые напоминания для тестовых регистраций (их должно остаться 2, не больше), получено ${afterSecondTick.length}`
+    );
+
+    console.log(
+      "[OK] напоминание за 24ч создаётся и отправляется ровно один раз на участника, повторный тик не создаёт новых (проверено по event_id, не по глобальным счётчикам тика)"
+    );
+  } finally {
+    await cleanup(eventId);
+  }
+}
+
+const WORKER_INTERVAL_MS = Number(process.env.WORKER_INTERVAL_MS) || 30_000;
+const SAFE_WORKER_INTERVAL_MS = 5 * 60 * 1000; // ниже этого предупреждаем — см. комментарий ниже
+
+// Требование кейса №9 ("организатор перенёс событие — все участники получают
+// письмо") плюс фикс этапа 5: напоминание, уже ждущее отправки и устаревшее
+// по schedule_version после переноса, должно быть пропущено, а не отправлено
+// со старой датой; сам перенос должен породить собственное reschedule-
+// уведомление, которое доходит, и не лишить участника места.
+//
+// Этот сценарий намеренно оставляет напоминание pending между его созданием
+// и переносом даты — а значит, гонится с собственным фоновым интервалом
+// backend (runWorkerTick каждые WORKER_INTERVAL_MS, index.ts): если интервал
+// backend успеет обработать это напоминание раньше PATCH, оно станет sent
+// ДО переноса, и проверка "устаревшее -> skipped" ничего не докажет (не
+// упадёт молча — просто не будет найдено ни одной pending/skipped записи, и
+// ассерт ниже прямо об этом сообщит). Чтобы не зависеть от удачи, backend
+// для прогона сценария стоит поднимать с большим WORKER_INTERVAL_MS (см.
+// README) — здесь только предупреждаем в консоли, если он маленький.
+async function scenarioRescheduleSkipsStaleReminderAndNotifiesActive(): Promise<void> {
+  if (WORKER_INTERVAL_MS < SAFE_WORKER_INTERVAL_MS) {
+    // Это значение из ЭТОГО процесса (.env сценария), не живой опрос backend —
+    // сигнал верен только если backend запущен из того же .env/окружения (как
+    // и требование про общий DATABASE_URL выше). Если backend поднят отдельно
+    // с явным override WORKER_INTERVAL_MS, предупреждение может сработать
+    // ложно (как у сценария, так и наоборот) — ориентируйся на то, с каким
+    // интервалом реально поднят backend, а не только на этот вывод.
+    console.warn(
+      `[WARN] WORKER_INTERVAL_MS=${WORKER_INTERVAL_MS} у сценария — если backend запущен с тем же ` +
+        `маленьким интервалом, он может обработать due-напоминание раньше переноса даты и сделать ` +
+        `проверку устаревания недостоверной. Перед сценарием подними backend с большим ` +
+        `WORKER_INTERVAL_MS (например, 3600000).`
+    );
+  }
+
+  const eventId = await createNotificationsTestEvent(Date.now() + 2 * 60 * 60 * 1000, 1);
+  try {
+    const email = `scenario-reschedule-${Date.now()}@example.test`;
+    await registerParticipant(eventId, email);
+
+    const { rows: regRows } = await pool.query(
+      "select id, access_token from registrations where event_id = $1 and email = $2",
+      [eventId, email]
+    );
+    const registrationId = regRows[0].id as string;
+    const accessToken = regRows[0].access_token as string;
+
+    // createDueReminders() сканирует ВСЮ БД, не только тестовое событие —
+    // его возвращаемое число ничего не доказывает про эту регистрацию.
+    // Намеренно не вызываем полный runWorkerTick: напоминание должно
+    // остаться pending до переноса даты, иначе устаревать будет уже нечему.
+    await createDueReminders();
+    const pending = await pool.query(
+      "select dispatch_status from notifications where registration_id = $1 and type = 'reminder'",
+      [registrationId]
+    );
+    assert(
+      pending.rows.length === 1 && pending.rows[0].dispatch_status === "pending",
+      `ожидалась ровно 1 pending reminder-запись для тестовой регистрации сразу после создания, получено ${JSON.stringify(pending.rows)} ` +
+        `(если напоминание уже sent — скорее всего, фоновый интервал backend успел его обработать раньше; см. предупреждение про WORKER_INTERVAL_MS выше)`
+    );
+
+    // Перенос далеко за пределы 24-часового окна, чтобы новое напоминание по
+    // актуальной версии точно не создалось само в ближайшем тике.
+    const newStartsAt = new Date(Date.now() + 30 * 60 * 60 * 1000).toISOString();
+    const patchRes = await api(`/api/events/${eventId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ starts_at: newStartsAt }),
+    });
+    assert(patchRes.status === 200, `перенос даты не удался: HTTP ${patchRes.status}`);
+
+    await runWorkerTick();
+
+    const { rows: notifications } = await pool.query(
+      `select type, dispatch_status, skip_reason from notifications
+       where registration_id = $1 order by created_at`,
+      [registrationId]
+    );
+
+    const reminders = notifications.filter((n) => n.type === "reminder");
+    assert(
+      reminders.length === 1,
+      `после переноса для тестовой регистрации должно остаться ровно 1 напоминание (устаревшее, без новых), получено ${reminders.length}`
+    );
+    assert(
+      reminders[0].dispatch_status === "skipped" && reminders[0].skip_reason === "stale_schedule_version",
+      `устаревшее напоминание должно быть skipped по stale_schedule_version, получено ${JSON.stringify(reminders[0])}`
+    );
+
+    const reschedule = notifications.find((n) => n.type === "reschedule");
+    assert(!!reschedule, "перенос даты должен создать reschedule-уведомление активному участнику");
+    assert(
+      reschedule!.dispatch_status === "sent",
+      `reschedule-уведомление должно быть отправлено, получено ${JSON.stringify(reschedule)}`
+    );
+
+    const myReg = await api(`/api/my/${accessToken}`);
+    assert(
+      myReg.status === 200 && myReg.body?.status === "confirmed",
+      "участник должен остаться confirmed после переноса, не потеряв место"
+    );
+
+    console.log(
+      "[OK] перенос даты: устаревшее напоминание пропущено (stale_schedule_version), reschedule-уведомление отправлено, место участника сохранено (проверено по registration_id, не по глобальным счётчикам тика)"
+    );
+  } finally {
+    await cleanup(eventId);
+  }
+}
+
 async function cleanup(eventId: string | null) {
   if (!eventId) return;
   // Удаляем только собственные данные этого прогона, по конкретному event_id —
@@ -312,6 +522,9 @@ async function main() {
   } finally {
     await cleanup(eventId);
   }
+
+  await scenarioReminderCreatedOnceWithin24h();
+  await scenarioRescheduleSkipsStaleReminderAndNotifiesActive();
 }
 
 main()

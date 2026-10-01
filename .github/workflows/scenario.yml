@@ -1,0 +1,74 @@
+name: Integration scenario
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  scenario:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: eventflow
+          POSTGRES_PASSWORD: eventflow
+          POSTGRES_DB: eventflow_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U eventflow"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Отдельная БД сервиса контейнера, никак не связана с рабочей базой
+      # разработчика — на каждый прогон CI поднимается с нуля и уничтожается
+      # вместе с job.
+      DATABASE_URL: postgres://eventflow:eventflow@localhost:5432/eventflow_ci
+      PORT: 3000
+      FRONTEND_ORIGIN: http://localhost:5173
+      ORGANIZER_EMAIL: organizer@example.com
+      ORGANIZER_PASSWORD: ci-only-password
+      SESSION_SECRET: ci-only-session-secret-not-for-reuse
+      # Большой интервал, чтобы фоновый тик backend не перехватил pending-
+      # напоминание сценария (проверка переноса даты) раньше, чем сценарий
+      # сам его обработает — см. комментарий в integrationScenario.ts.
+      WORKER_INTERVAL_MS: "3600000"
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      - run: npm run migrate
+
+      - run: npm run seed
+
+      - name: Start backend
+        run: nohup npm run dev > backend.log 2>&1 &
+
+      - name: Wait for backend health
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/health; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "backend didn't become healthy in time" >&2
+          cat backend.log || true
+          exit 1
+
+      - run: npm run scenario

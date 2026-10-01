@@ -51,6 +51,10 @@ export function logout(_req: Request, res: Response) {
   res.json({ ok: true });
 }
 
+export function me(req: AuthedRequest, res: Response) {
+  res.json({ organizerId: req.organizerId });
+}
+
 export function requireOrganizer(req: AuthedRequest, res: Response, next: NextFunction) {
   const token = req.cookies?.[SESSION_COOKIE];
   if (!token) {

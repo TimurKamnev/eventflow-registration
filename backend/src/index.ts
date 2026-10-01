@@ -3,7 +3,7 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { pool } from "./db.js";
-import { login, logout, requireOrganizer } from "./auth.js";
+import { login, logout, me, requireOrganizer } from "./auth.js";
 import { createEvent, listEvents, getEvent, updateEvent } from "./events.js";
 import {
   getPublicEvent,
@@ -39,6 +39,7 @@ app.get("/health/db", async (_req, res) => {
 
 app.post("/api/auth/login", login);
 app.post("/api/auth/logout", logout);
+app.get("/api/auth/me", requireOrganizer, me);
 
 app.post("/api/events", requireOrganizer, createEvent);
 app.get("/api/events", requireOrganizer, listEvents);
