@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type MyRegistration } from "./api";
+import { localizeError } from "./errors";
 import { formatBishkek } from "./time";
 import { Badge, Banner } from "./ui";
 import "./App.css";
@@ -38,8 +39,8 @@ export function ParticipantPage({ token }: { token: string }) {
     try {
       await api.cancelMyRegistration(token);
       load();
-    } catch {
-      setError("Не удалось отменить регистрацию");
+    } catch (err) {
+      setError(localizeError(err));
     } finally {
       setBusy(false);
     }

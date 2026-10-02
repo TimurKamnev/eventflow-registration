@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { api, ApiError, eventCountsWsUrl, type EventCounts, type EventRecord } from "./api";
+import { api, eventCountsWsUrl, type EventCounts, type EventRecord } from "./api";
+import { errorCodeFrom, localizeError } from "./errors";
 import { Badge, Banner, Field, PageHeader } from "./ui";
 
-const CHECKIN_ERROR_LABELS: Record<string, string> = {
-  not_found: "Билет с таким кодом не найден",
-  already_checked_in: "Этот билет уже отмечен на входе",
-  not_confirmed: "Билет не подтверждён (лист ожидания или отменён) — вход закрыт",
-};
+// not_found — общий код на несколько ручек backend (события, регистрации,
+// чекин); здесь по контексту он всегда означает конкретно билет, поэтому
+// локальная подпись точнее общей из errors.ts.
+const CHECKIN_NOT_FOUND_MESSAGE = "Билет с таким кодом не найден";
 
 export function CheckinView({ event }: { event: EventRecord }) {
   const [counts, setCounts] = useState<EventCounts | null>(null);
@@ -86,12 +86,8 @@ export function CheckinView({ event }: { event: EventRecord }) {
       setResult({ ok: true, text: "Отмечен на входе" });
       setCode("");
     } catch (err) {
-      if (err instanceof ApiError) {
-        const errorCode = (err.body as { error?: string })?.error;
-        setResult({ ok: false, text: errorCode ? CHECKIN_ERROR_LABELS[errorCode] ?? errorCode : "Не удалось отметить билет" });
-      } else {
-        setResult({ ok: false, text: "Не удалось отметить билет" });
-      }
+      const text = errorCodeFrom(err) === "not_found" ? CHECKIN_NOT_FOUND_MESSAGE : localizeError(err);
+      setResult({ ok: false, text });
     } finally {
       setBusy(false);
     }

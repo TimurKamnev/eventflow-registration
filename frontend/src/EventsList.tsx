@@ -44,7 +44,7 @@ export function EventsList({ onCreate, onEdit, onViewNotifications, onCheckin }:
                 <th>Дата (Asia/Bishkek)</th>
                 <th>Лимит</th>
                 <th>Статус</th>
-                <th />
+                <th>Действия</th>
               </tr>
             </thead>
             <tbody>
@@ -76,7 +76,7 @@ export function EventsList({ onCreate, onEdit, onViewNotifications, onCheckin }:
                           target="_blank"
                           rel="noreferrer"
                         >
-                          Страница
+                          Страница регистрации
                         </a>
                         <button className="btn btn-sm btn-ghost" onClick={() => onViewNotifications(event)}>
                           Письма

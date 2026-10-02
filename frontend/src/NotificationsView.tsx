@@ -24,9 +24,11 @@ const STATUS_TONE: Record<EventNotification["dispatch_status"], "neutral" | "suc
   skipped: "warning",
 };
 
+type CopiedField = { id: string; field: "link" | "ticket" } | null;
+
 export function NotificationsView({ event }: { event: EventRecord }) {
   const [items, setItems] = useState<EventNotification[] | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copied, setCopied] = useState<CopiedField>(null);
 
   function reload() {
     api.eventNotifications(event.id).then((res) => setItems(res.notifications));
@@ -34,10 +36,10 @@ export function NotificationsView({ event }: { event: EventRecord }) {
 
   useEffect(reload, [event.id]);
 
-  async function copyLink(id: string, url: string) {
-    await navigator.clipboard.writeText(url);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId((current) => (current === id ? null : current)), 1500);
+  async function copyToClipboard(id: string, field: "link" | "ticket", value: string) {
+    await navigator.clipboard.writeText(value);
+    setCopied({ id, field });
+    setTimeout(() => setCopied((current) => (current?.id === id && current.field === field ? null : current)), 1500);
   }
 
   return (
@@ -99,7 +101,22 @@ export function NotificationsView({ event }: { event: EventRecord }) {
                     </Badge>
                   </td>
                   <td data-label="Билет">
-                    <code>{n.payload.ticket_code ?? "—"}</code>
+                    {n.payload.ticket_code ? (
+                      <div className="row-actions-secondary">
+                        <code>{n.payload.ticket_code}</code>
+                        <button
+                          type="button"
+                          className={`btn-icon copy-btn${copied?.id === n.id && copied.field === "ticket" ? " copied" : ""}`}
+                          aria-label="Скопировать код билета"
+                          title="Скопировать код билета"
+                          onClick={() => copyToClipboard(n.id, "ticket", n.payload.ticket_code!)}
+                        >
+                          ⧉
+                        </button>
+                      </div>
+                    ) : (
+                      <code>—</code>
+                    )}
                   </td>
                   <td className="cell-actions" data-label="Ссылка">
                     <div className="row-actions-secondary">
@@ -112,8 +129,9 @@ export function NotificationsView({ event }: { event: EventRecord }) {
                         Открыть
                       </a>
                       <button
-                        className={`btn btn-sm btn-ghost copy-btn${copiedId === n.id ? " copied" : ""}`}
-                        onClick={() => copyLink(n.id, n.payload.my_registration_url)}
+                        type="button"
+                        className={`btn btn-sm btn-ghost copy-btn${copied?.id === n.id && copied.field === "link" ? " copied" : ""}`}
+                        onClick={() => copyToClipboard(n.id, "link", n.payload.my_registration_url)}
                       >
                         Копировать
                       </button>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { api, ApiError, type PublicEvent } from "./api";
+import { api, type PublicEvent } from "./api";
+import { localizeError } from "./errors";
 import { formatBishkek } from "./time";
 import { Banner, Field } from "./ui";
 import "./App.css";
@@ -26,11 +27,7 @@ export function PublicEventPage({ eventId }: { eventId: string }) {
       const res = await api.register(eventId, email);
       setSubmitted(res.message);
     } catch (err) {
-      if (err instanceof ApiError && (err.body as { error?: string })?.error === "event_already_started") {
-        setError("Регистрация закрыта — событие уже началось.");
-      } else {
-        setError("Не удалось отправить заявку, попробуйте ещё раз");
-      }
+      setError(localizeError(err));
     } finally {
       setBusy(false);
     }

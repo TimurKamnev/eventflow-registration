@@ -107,7 +107,7 @@
   line-height: 1.2;
 }
 
-.btn:hover {
+.btn:hover:not(:disabled) {
   background: var(--neutral-bg);
   border-color: var(--text-faint);
 }
@@ -117,9 +117,16 @@
   outline-offset: 2px;
 }
 
+/* Один флэт-вид disabled для всех вариантов (primary/danger/ghost) —
+   побеждает их цвет по специфичности (.btn:disabled выше, чем .btn-primary
+   и т.п.), поэтому без :not(:disabled) они бы продолжали выглядеть
+   "активными". Текст — читаемый приглушённый цвет, не теряется в opacity. */
 .btn:disabled {
-  opacity: 0.55;
   cursor: not-allowed;
+  background: var(--neutral-bg);
+  border-color: var(--border);
+  color: var(--text-faint);
+  box-shadow: none;
 }
 
 .btn-primary {
@@ -156,6 +163,42 @@
   background: var(--neutral-bg);
   color: var(--brand);
   border-color: transparent;
+}
+
+/* Компактная иконка-кнопка (копирование кода билета в таблице) — всегда
+   видима, не только по hover; доступность — через aria-label на кнопке,
+   не через title/hover-подсказку. */
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.btn-icon:hover:not(:disabled) {
+  background: var(--neutral-bg);
+  color: var(--brand);
+}
+
+.btn-icon:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.btn-icon:disabled {
+  cursor: not-allowed;
+  color: var(--text-faint);
+  background: transparent;
 }
 
 .btn-sm {

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api, ApiError, type EventRecord } from "./api";
+import { errorCodeFrom, localizeError } from "./errors";
 import { bishkekInputValueToUtcIso, utcIsoToBishkekInputValue } from "./time";
 import { Banner, Field, PageHeader } from "./ui";
 
@@ -39,16 +40,19 @@ export function EventForm({ event, onSaved, onCancel }: Props) {
       }
       onSaved();
     } catch (err) {
-      if (err instanceof ApiError && err.body && typeof err.body === "object") {
-        const body = err.body as { error?: string; occupied?: number };
-        if (body.error === "capacity_below_occupied") {
-          setError(`Нельзя уменьшить лимит: уже занято мест — ${body.occupied}`);
-          setCapacityError(true);
-        } else {
-          setError(body.error ?? "Не удалось сохранить событие");
-        }
+      if (errorCodeFrom(err) === "capacity_below_occupied") {
+        const occupied =
+          err instanceof ApiError && err.body && typeof err.body === "object"
+            ? (err.body as { occupied?: number }).occupied
+            : undefined;
+        setError(
+          typeof occupied === "number"
+            ? `Нельзя уменьшить лимит: уже занято мест — ${occupied}`
+            : "Нельзя уменьшить лимит: уже есть занятые места"
+        );
+        setCapacityError(true);
       } else {
-        setError("Не удалось сохранить событие");
+        setError(localizeError(err));
       }
     } finally {
       setBusy(false);

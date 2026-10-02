@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { api, ApiError } from "./api";
+import { api } from "./api";
+import { localizeError } from "./errors";
 import { Banner, Field } from "./ui";
 
 export function LoginForm({ onSuccess }: { onSuccess: () => void }) {
@@ -16,11 +17,7 @@ export function LoginForm({ onSuccess }: { onSuccess: () => void }) {
       await api.login(email, password);
       onSuccess();
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        setError("Неверный email или пароль");
-      } else {
-        setError("Не удалось войти, попробуйте ещё раз");
-      }
+      setError(localizeError(err));
     } finally {
       setBusy(false);
     }
