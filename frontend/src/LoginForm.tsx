@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api, ApiError } from "./api";
+import { Banner, Field } from "./ui";
 
 export function LoginForm({ onSuccess }: { onSuccess: () => void }) {
   const [email, setEmail] = useState("");
@@ -26,36 +27,46 @@ export function LoginForm({ onSuccess }: { onSuccess: () => void }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ maxWidth: 320 }}>
-      <h1>Вход для организатора</h1>
-      <div>
-        <label>
-          Email
-          <br />
+    <div className="card">
+      <h1 style={{ marginBottom: "var(--space-5)" }}>Вход для организатора</h1>
+      <form onSubmit={handleSubmit}>
+        <Field label="Email" htmlFor="login-email">
           <input
+            id="login-email"
+            className={`input${error ? " has-error" : ""}`}
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setError(null);
+            }}
+            autoComplete="username"
+            disabled={busy}
             required
           />
-        </label>
-      </div>
-      <div style={{ marginTop: 8 }}>
-        <label>
-          Пароль
-          <br />
+        </Field>
+        <Field label="Пароль" htmlFor="login-password">
           <input
+            id="login-password"
+            className={`input${error ? " has-error" : ""}`}
             type="password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setError(null);
+            }}
+            autoComplete="current-password"
+            disabled={busy}
             required
           />
-        </label>
-      </div>
-      {error && <p style={{ color: "crimson" }}>{error}</p>}
-      <button type="submit" disabled={busy} style={{ marginTop: 8 }}>
-        {busy ? "Вхожу..." : "Войти"}
-      </button>
-    </form>
+        </Field>
+        {error && <Banner tone="error">{error}</Banner>}
+        <div className="form-actions">
+          <button type="submit" className="btn btn-primary" disabled={busy} style={{ width: "100%" }}>
+            {busy ? "Вхожу..." : "Войти"}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }

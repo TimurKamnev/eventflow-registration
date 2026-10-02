@@ -1,60 +1,97 @@
 import { useEffect, useState } from "react";
 import { api, type EventRecord } from "./api";
-import { formatBishkek } from "./time";
+import { formatBishkek, isEventStarted } from "./time";
+import { Badge, PageHeader } from "./ui";
 
 interface Props {
   onCreate: () => void;
   onEdit: (event: EventRecord) => void;
   onViewNotifications: (event: EventRecord) => void;
   onCheckin: (event: EventRecord) => void;
-  reloadKey: number;
 }
 
-export function EventsList({ onCreate, onEdit, onViewNotifications, onCheckin, reloadKey }: Props) {
+export function EventsList({ onCreate, onEdit, onViewNotifications, onCheckin }: Props) {
   const [events, setEvents] = useState<EventRecord[] | null>(null);
 
   useEffect(() => {
     api.listEvents().then((res) => setEvents(res.events));
-  }, [reloadKey]);
+  }, []);
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1>События</h1>
-        <button onClick={onCreate}>Создать событие</button>
-      </div>
+      <PageHeader
+        title="События"
+        actions={
+          <button className="btn btn-primary" onClick={onCreate}>
+            Создать событие
+          </button>
+        }
+      />
+
       {events === null && <p>Загрузка...</p>}
-      {events?.length === 0 && <p>Событий пока нет.</p>}
+      {events?.length === 0 && (
+        <div className="empty-state">
+          <div className="empty-state-title">Событий пока нет</div>
+          <p>Создайте первое, чтобы получить публичную ссылку для регистрации.</p>
+        </div>
+      )}
       {events && events.length > 0 && (
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th style={{ textAlign: "left" }}>Название</th>
-              <th style={{ textAlign: "left" }}>Дата (Asia/Bishkek)</th>
-              <th style={{ textAlign: "left" }}>Лимит</th>
-              <th style={{ textAlign: "left" }}>Версия</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {events.map((event) => (
-              <tr key={event.id}>
-                <td>{event.title}</td>
-                <td>{formatBishkek(event.starts_at)}</td>
-                <td>{event.capacity}</td>
-                <td>{event.schedule_version}</td>
-                <td style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => onEdit(event)}>Редактировать</button>
-                  <a href={`/e/${event.id}`} target="_blank" rel="noreferrer">
-                    Публичная страница
-                  </a>
-                  <button onClick={() => onViewNotifications(event)}>Письма</button>
-                  <button onClick={() => onCheckin(event)}>Чекин</button>
-                </td>
+        <div className="table-wrap">
+          <table className="table table-cards">
+            <thead>
+              <tr>
+                <th>Название</th>
+                <th>Дата (Asia/Bishkek)</th>
+                <th>Лимит</th>
+                <th>Статус</th>
+                <th />
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {events.map((event) => (
+                <tr key={event.id}>
+                  <td className="col-main" data-label="Название">
+                    {event.title}
+                  </td>
+                  <td className="col-muted" data-label="Дата">
+                    {formatBishkek(event.starts_at)}
+                  </td>
+                  <td data-label="Лимит">{event.capacity}</td>
+                  <td data-label="Статус">
+                    {isEventStarted(event.starts_at) ? (
+                      <Badge tone="warning">Началось</Badge>
+                    ) : (
+                      <Badge tone="neutral">Предстоит</Badge>
+                    )}
+                  </td>
+                  <td className="cell-actions">
+                    <div className="row-actions">
+                      <button className="btn btn-sm" onClick={() => onEdit(event)}>
+                        Редактировать
+                      </button>
+                      <div className="row-actions-secondary">
+                        <a
+                          className="btn btn-sm btn-ghost"
+                          href={`/e/${event.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Страница
+                        </a>
+                        <button className="btn btn-sm btn-ghost" onClick={() => onViewNotifications(event)}>
+                          Письма
+                        </button>
+                        <button className="btn btn-sm btn-ghost" onClick={() => onCheckin(event)}>
+                          Чекин
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

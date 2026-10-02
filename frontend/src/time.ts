@@ -22,3 +22,8 @@ export function formatBishkek(utcIso: string): string {
     timeStyle: "short",
   }).format(new Date(utcIso));
 }
+
+/** Чисто отображение в списке события — бизнес-правило "нельзя после начала" живёт в backend. */
+export function isEventStarted(utcIso: string): boolean {
+  return new Date(utcIso).getTime() <= Date.now();
+}

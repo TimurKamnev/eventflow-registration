@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api, ApiError, type EventRecord } from "./api";
 import { bishkekInputValueToUtcIso, utcIsoToBishkekInputValue } from "./time";
+import { Banner, Field, PageHeader } from "./ui";
 
 interface Props {
   event?: EventRecord;
@@ -16,11 +17,13 @@ export function EventForm({ event, onSaved, onCancel }: Props) {
   );
   const [capacity, setCapacity] = useState(event ? String(event.capacity) : "");
   const [error, setError] = useState<string | null>(null);
+  const [capacityError, setCapacityError] = useState(false);
   const [busy, setBusy] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setCapacityError(false);
     setBusy(true);
     const data = {
       title,
@@ -40,6 +43,7 @@ export function EventForm({ event, onSaved, onCancel }: Props) {
         const body = err.body as { error?: string; occupied?: number };
         if (body.error === "capacity_below_occupied") {
           setError(`Нельзя уменьшить лимит: уже занято мест — ${body.occupied}`);
+          setCapacityError(true);
         } else {
           setError(body.error ?? "Не удалось сохранить событие");
         }
@@ -52,71 +56,85 @@ export function EventForm({ event, onSaved, onCancel }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ maxWidth: 420 }}>
-      <h2>{event ? "Редактировать событие" : "Новое событие"}</h2>
-      <div>
-        <label>
-          Название
-          <br />
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            required
-            style={{ width: "100%" }}
-          />
-        </label>
+    <div>
+      <PageHeader title={event ? "Редактировать событие" : "Новое событие"} backTo="/admin/events" backLabel="К событиям" />
+      <div className="card" style={{ maxWidth: 480 }}>
+        <form onSubmit={handleSubmit}>
+          <Field label="Название" htmlFor="event-title">
+            <input
+              id="event-title"
+              className="input"
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              disabled={busy}
+              required
+            />
+          </Field>
+
+          <Field label="Описание" htmlFor="event-description">
+            <textarea
+              id="event-description"
+              className="textarea"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              disabled={busy}
+            />
+          </Field>
+
+          <Field
+            label="Дата и время (Asia/Bishkek)"
+            htmlFor="event-starts-at"
+            hint="Вид поля (dd.mm.yyyy или mm/dd/yyyy, 24ч или AM/PM) зависит от браузера и ОС. Указанное время понимается как Asia/Bishkek; на сервере хранится в UTC. Например: 05.11.2026 14:00."
+          >
+            <input
+              id="event-starts-at"
+              className="input"
+              type="datetime-local"
+              value={startsAt}
+              onChange={(e) => setStartsAt(e.target.value)}
+              disabled={busy}
+              required
+            />
+          </Field>
+
+          <Field
+            label="Лимит мест"
+            htmlFor="event-capacity"
+            error={capacityError ? error : null}
+            hint={
+              !capacityError && event
+                ? `Версия расписания: ${event.schedule_version}. Перенос даты отправит уведомление всем активным участникам.`
+                : undefined
+            }
+          >
+            <input
+              id="event-capacity"
+              className={`input${capacityError ? " has-error" : ""}`}
+              type="number"
+              min={1}
+              value={capacity}
+              onChange={(e) => {
+                setCapacity(e.target.value);
+                setCapacityError(false);
+              }}
+              disabled={busy}
+              required
+            />
+          </Field>
+
+          {error && !capacityError && <Banner tone="error">{error}</Banner>}
+
+          <div className="form-actions">
+            <button type="submit" className="btn btn-primary" disabled={busy}>
+              {busy ? "Сохраняю..." : "Сохранить"}
+            </button>
+            <button type="button" className="btn" onClick={onCancel} disabled={busy}>
+              Отмена
+            </button>
+          </div>
+        </form>
       </div>
-      <div style={{ marginTop: 8 }}>
-        <label>
-          Описание
-          <br />
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            style={{ width: "100%" }}
-          />
-        </label>
-      </div>
-      <div style={{ marginTop: 8 }}>
-        <label>
-          Дата и время (Asia/Bishkek)
-          <br />
-          <input
-            type="datetime-local"
-            value={startsAt}
-            onChange={(e) => setStartsAt(e.target.value)}
-            required
-          />
-        </label>
-      </div>
-      <div style={{ marginTop: 8 }}>
-        <label>
-          Лимит мест
-          <br />
-          <input
-            type="number"
-            min={1}
-            value={capacity}
-            onChange={(e) => setCapacity(e.target.value)}
-            required
-          />
-        </label>
-      </div>
-      {event && (
-        <p style={{ color: "#666", fontSize: 14 }}>
-          Изменение даты уведомит участников (появится в следующем этапе). Версия расписания: {event.schedule_version}.
-        </p>
-      )}
-      {error && <p style={{ color: "crimson" }}>{error}</p>}
-      <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-        <button type="submit" disabled={busy}>
-          {busy ? "Сохраняю..." : "Сохранить"}
-        </button>
-        <button type="button" onClick={onCancel} disabled={busy}>
-          Отмена
-        </button>
-      </div>
-    </form>
+    </div>
   );
 }

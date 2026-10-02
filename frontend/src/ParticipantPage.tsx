@@ -1,12 +1,21 @@
 import { useEffect, useState } from "react";
 import { api, type MyRegistration } from "./api";
 import { formatBishkek } from "./time";
+import { Badge, Banner } from "./ui";
+import "./App.css";
 
 const STATUS_LABELS: Record<MyRegistration["status"], string> = {
   confirmed: "Место подтверждено",
   waitlisted: "В листе ожидания",
   cancelled: "Регистрация отменена",
   checked_in: "Отмечены на входе",
+};
+
+const STATUS_TONE: Record<MyRegistration["status"], "neutral" | "success" | "warning" | "danger"> = {
+  confirmed: "success",
+  waitlisted: "warning",
+  cancelled: "danger",
+  checked_in: "success",
 };
 
 export function ParticipantPage({ token }: { token: string }) {
@@ -36,37 +45,74 @@ export function ParticipantPage({ token }: { token: string }) {
     }
   }
 
-  if (reg === null) return <main style={{ padding: "2rem" }}>Загрузка...</main>;
-  if (reg === "not_found")
-    return <main style={{ padding: "2rem" }}>Регистрация не найдена — проверьте ссылку.</main>;
+  if (reg === null) {
+    return (
+      <div className="public-shell">
+        <p>Загрузка...</p>
+      </div>
+    );
+  }
+  if (reg === "not_found") {
+    return (
+      <div className="public-shell">
+        <p>Регистрация не найдена — проверьте ссылку.</p>
+      </div>
+    );
+  }
 
   const canCancel = reg.status === "confirmed" || reg.status === "waitlisted";
 
   return (
-    <main style={{ fontFamily: "sans-serif", padding: "2rem", maxWidth: 480 }}>
-      <h1>{reg.event.title}</h1>
-      <p>
-        <strong>Дата:</strong> {formatBishkek(reg.event.starts_at)}
-      </p>
-      <p>
-        <strong>Статус:</strong> {STATUS_LABELS[reg.status]}
-      </p>
-      {reg.status === "waitlisted" && reg.waitlist_position !== null && (
-        <p>Позиция в очереди: {reg.waitlist_position}</p>
-      )}
-      {reg.ticket_code && (
-        <p>
-          <strong>Код билета:</strong> {reg.ticket_code}
-        </p>
-      )}
-      {reg.status === "checked_in" && <p>Отмена недоступна — вы уже прошли чекин на входе.</p>}
+    <div className="public-shell">
+      <div className="card public-card">
+        <h1>{reg.event.title}</h1>
+        <div style={{ marginTop: "var(--space-4)" }}>
+          <div className="kv">
+            <span className="kv-label">Дата</span>
+            <span>{formatBishkek(reg.event.starts_at)}</span>
+          </div>
+          <div className="kv">
+            <span className="kv-label">Статус</span>
+            <Badge tone={STATUS_TONE[reg.status]}>{STATUS_LABELS[reg.status]}</Badge>
+          </div>
+          {reg.status === "waitlisted" && reg.waitlist_position !== null && (
+            <div className="kv">
+              <span className="kv-label">В очереди</span>
+              <span>позиция {reg.waitlist_position}</span>
+            </div>
+          )}
+          {reg.ticket_code && (
+            <div className="kv">
+              <span className="kv-label">Код билета</span>
+              <code className={reg.status === "cancelled" ? "code-void" : undefined}>{reg.ticket_code}</code>
+              {reg.status === "cancelled" && <Badge tone="danger">аннулирован</Badge>}
+            </div>
+          )}
+        </div>
 
-      {error && <p style={{ color: "crimson" }}>{error}</p>}
-      {canCancel && (
-        <button onClick={handleCancel} disabled={busy}>
-          {busy ? "Отменяю..." : "Отказаться от участия"}
-        </button>
-      )}
-    </main>
+        {reg.status === "checked_in" && (
+          <div style={{ marginTop: "var(--space-4)" }}>
+            <Banner tone="neutral">Отмена недоступна — вы уже прошли чекин на входе.</Banner>
+          </div>
+        )}
+
+        {error && (
+          <div style={{ marginTop: "var(--space-4)" }}>
+            <Banner tone="error">{error}</Banner>
+          </div>
+        )}
+
+        {canCancel && (
+          <>
+            <hr className="kv-divider" />
+            <div className="form-actions" style={{ marginTop: 0 }}>
+              <button className="btn btn-danger" onClick={handleCancel} disabled={busy}>
+                {busy ? "Отменяю..." : "Отказаться от участия"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }

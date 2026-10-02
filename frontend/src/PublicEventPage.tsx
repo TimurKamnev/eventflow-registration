@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type PublicEvent } from "./api";
 import { formatBishkek } from "./time";
+import { Banner, Field } from "./ui";
+import "./App.css";
 
 export function PublicEventPage({ eventId }: { eventId: string }) {
   const [event, setEvent] = useState<PublicEvent | null | "not_found">(null);
@@ -34,43 +36,72 @@ export function PublicEventPage({ eventId }: { eventId: string }) {
     }
   }
 
-  if (event === null) return <main style={{ padding: "2rem" }}>Загрузка...</main>;
-  if (event === "not_found") return <main style={{ padding: "2rem" }}>Событие не найдено.</main>;
+  if (event === null) {
+    return (
+      <div className="public-shell">
+        <p>Загрузка...</p>
+      </div>
+    );
+  }
+  if (event === "not_found") {
+    return (
+      <div className="public-shell">
+        <p>Событие не найдено.</p>
+      </div>
+    );
+  }
 
   return (
-    <main style={{ fontFamily: "sans-serif", padding: "2rem", maxWidth: 480 }}>
-      <h1>{event.title}</h1>
-      {event.description && <p>{event.description}</p>}
-      <p>
-        <strong>Дата:</strong> {formatBishkek(event.starts_at)}
-      </p>
-      <p>
-        {event.isFull
-          ? "Свободных мест нет — новые заявки попадают в лист ожидания."
-          : `Свободных мест: ${event.remaining} из ${event.capacity}`}
-      </p>
+    <div className="public-shell">
+      <div className="card public-card">
+        <h1>{event.title}</h1>
+        {event.description && (
+          <p style={{ color: "var(--text-muted)", marginTop: "var(--space-2)" }}>{event.description}</p>
+        )}
+        <div style={{ marginTop: "var(--space-4)" }}>
+          <div className="kv">
+            <span className="kv-label">Дата</span>
+            <span>{formatBishkek(event.starts_at)}</span>
+          </div>
+          <div className="kv">
+            <span className="kv-label">Места</span>
+            <span>
+              {event.isFull
+                ? "Свободных мест нет — новые заявки попадают в лист ожидания"
+                : `Свободно ${event.remaining} из ${event.capacity}`}
+            </span>
+          </div>
+        </div>
 
-      {submitted ? (
-        <p>{submitted}</p>
-      ) : (
-        <form onSubmit={handleSubmit}>
-          <label>
-            Email
-            <br />
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              style={{ width: "100%" }}
-            />
-          </label>
-          {error && <p style={{ color: "crimson" }}>{error}</p>}
-          <button type="submit" disabled={busy} style={{ marginTop: 8 }}>
-            {busy ? "Отправляю..." : "Зарегистрироваться"}
-          </button>
-        </form>
-      )}
-    </main>
+        {submitted ? (
+          <div style={{ marginTop: "var(--space-5)" }}>
+            <Banner tone="success">{submitted}</Banner>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} style={{ marginTop: "var(--space-5)" }}>
+            <Field label="Email" htmlFor="register-email">
+              <input
+                id="register-email"
+                className={`input${error ? " has-error" : ""}`}
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setError(null);
+                }}
+                disabled={busy}
+                required
+              />
+            </Field>
+            {error && <Banner tone="error">{error}</Banner>}
+            <div className="form-actions">
+              <button type="submit" className="btn btn-primary" disabled={busy} style={{ width: "100%" }}>
+                {busy ? "Отправляю..." : "Зарегистрироваться"}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
   );
 }

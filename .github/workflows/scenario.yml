@@ -50,6 +50,17 @@ jobs:
         with:
           node-version: 20
 
+      # Независим от backend/БД ниже — ловит именно те ошибки (например,
+      # запрещённый erasableSyntaxOnly-синтаксис), которые видит только
+      # tsc -b перед vite build, а не голый tsc --noEmit без -p.
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
       - run: npm ci
 
       - run: npm run migrate
