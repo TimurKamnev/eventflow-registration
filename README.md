@@ -220,14 +220,18 @@ cd backend && npm run scenario
 
 Завершается кодом `0` при успехе и `1` при любой проваленной проверке.
 
-**CI.** `.github/workflows/scenario.yml` прогоняет этот же сценарий на
-каждый push/PR в `main`: отдельный Postgres-сервис на весь прогон (не
-связан ни с локальной, ни с рабочей БД), `migrate`+`seed`+`dev`+
-`npm run scenario`, с большим `WORKER_INTERVAL_MS`, чтобы фоновый тик
-backend не гонялся со сценарием (см. оговорку выше). Подтверждено реальным
-прогоном, а не только локальным моделированием: [run
-36831769427](https://github.com/TimurKamnev/eventflow-registration/actions/runs/36831769427),
-`success`, все шаги зелёные включая `npm run scenario`, 40 секунд.
+**CI.** `.github/workflows/scenario.yml` на каждый push/PR в `main`:
+сначала `npm ci`+`npm run build` для frontend (независимо от backend/БД —
+именно этот шаг ловит ошибки сборки, которые голый `tsc --noEmit` без
+`-p` пропускает, см. `docs/decisions.md`), затем отдельный Postgres-сервис
+на весь прогон (не связан ни с локальной, ни с рабочей БД),
+`migrate`+`seed`+`dev`+`npm run scenario` для backend, с большим
+`WORKER_INTERVAL_MS`, чтобы фоновый тик backend не гонялся со сценарием
+(см. оговорку выше). Подтверждено реальным прогоном, а не только
+локальным моделированием: [run
+36962400302](https://github.com/TimurKamnev/eventflow-registration/actions/runs/36962400302),
+`success`, все шаги зелёные включая `Build frontend` и `npm run
+scenario`, 33 секунды.
 
 ## Стек и почему
 
